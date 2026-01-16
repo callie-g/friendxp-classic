@@ -43,7 +43,7 @@ FriendXP.LDB = LibStub:GetLibrary("LibDataBroker-1.1"):NewDataObject("FriendXP",
    FriendXP:SendXP()
   elseif (button == "RightButton") then
    if (configGenerated) then
-    InterfaceOptionsFrame_OpenToCategory(FriendXP.configFrame)
+    -- InterfaceOptionsFrame_OpenToCategory(FriendXP.configFrame) FIXME
    else
     FriendXP:WorldEnter()
    end
@@ -1016,7 +1016,7 @@ function FriendXP:CreateFriendXPBar() -- Should merge its update functions here 
  xpbar.rest:SetAllPoints(true)
 
  xpbar.text = xpbar.xp:CreateFontString(nil, 'OVERLAY')
- xpbar.text:SetFont(LSM:Fetch("font", self.db.profile.friendbar.text.font), self.db.profile.friendbar.text.size, self.db.profile.friendbar.text.style)
+ xpbar.text:SetFont(LSM:Fetch("font", self.db.profile.friendbar.text.font), self.db.profile.friendbar.text.size, self.db.profile.friendbar.text.style, "")
  xpbar.text:SetPoint("CENTER")
 
  xpbar.bg:SetTexture(LSM:Fetch("statusbar", self.db.profile.friendbar.texture))
@@ -1070,7 +1070,7 @@ function FriendXP:UpdateSettings()
  xpbar.xp:GetStatusBarTexture():SetHorizTile(self.db.profile.friendbar.tile)
  xpbar.rest:GetStatusBarTexture():SetHorizTile(self.db.profile.friendbar.tile)
 
- xpbar.text:SetFont(LSM:Fetch("font", self.db.profile.friendbar.text.font), self.db.profile.friendbar.text.size, self.db.profile.friendbar.text.style)
+ xpbar.text:SetFont(LSM:Fetch("font", self.db.profile.friendbar.text.font), self.db.profile.friendbar.text.size, self.db.profile.friendbar.text.style, "")
  xpbar.text:SetTextColor(self.db.profile.friendbar.text.color.r, self.db.profile.friendbar.text.color.g, self.db.profile.friendbar.text.color.b, self.db.profile.friendbar.text.color.a);
 
  if (self.db.profile.enabled and self.db.profile.friendbar.enabled) then
@@ -1365,7 +1365,7 @@ function FriendXP:CreateMinibar(ft, b, y, x) -- This whole function needs work
  frame.bg:SetAllPoints(true)
  frame.bg:SetTexture(LSM:Fetch("statusbar", db.xp.texture))
  frame.bg:SetVertexColor(db.xp.bgcolor.r, db.xp.bgcolor.g, db.xp.bgcolor.b, db.xp.bgcolor.a)
- frame.text:SetFont(LSM:Fetch("font", db.xp.text.font), db.xp.text.size, db.xp.text.style)
+ frame.text:SetFont(LSM:Fetch("font", db.xp.text.font), db.xp.text.size, db.xp.text.style, "")
  frame.text:SetTextColor(db.xp.text.color.r, db.xp.text.color.g, db.xp.text.color.b, db.xp.text.color.a);
  local pname = ft["name"];
  if (db.xp.namelen > 0) then
@@ -1760,7 +1760,7 @@ end
 
 function FriendXP:UpdateFONTS() -- Going do something about all these update fonts someday; also do I really need a font for every class color
  for i, v in pairs(RAID_CLASS_COLORS) do
-  self.fonts["class"][i]:SetFont(LSM:Fetch("font", self.db.profile.tooltip.normal.font), self.db.profile.tooltip.normal.size)
+  self.fonts["class"][i]:SetFont(LSM:Fetch("font", self.db.profile.tooltip.normal.font), self.db.profile.tooltip.normal.size, "")
   self.fonts["class"][i]:SetTextColor(RAID_CLASS_COLORS[i]["r"], RAID_CLASS_COLORS[i]["g"], RAID_CLASS_COLORS[i]["b"])
  end
 end
@@ -1837,18 +1837,9 @@ function FriendXP:WorldEnter()
  self:UnregisterEvent("PLAYER_ENTERING_WORLD")
 
  configGenerated = true
- ChatFrame_AddMessageEventFilter("CHAT_MSG_SYSTEM", FriendXP_RemoveNoPlayerNamed)
+
  self:SendXP()
 end
-
-function FriendXP_RemoveNoPlayerNamed(self, event, msg, ...)
-	found = string.find(msg, "^No player named '.-' is currently playing.$")
-	
-	if not found then return false end
-	
-	return true -- Hide message
-end
-
 
 function FriendXP:HandleIt(input)
  if not input then return end
@@ -1901,9 +1892,8 @@ function FriendXP:HandleIt(input)
   self:Print("Sent experience")
   return
  end
-
- InterfaceOptionsFrame_OpenToCategory(self.configFrame)
- InterfaceOptionsFrame_OpenToCategory(self.configFrame)
+ 
+ LibStub("AceConfigDialog-3.0"):Open("FriendXP")
 end
 
 function FriendXP:SendXP()
@@ -1966,30 +1956,28 @@ function FriendXP:SendXP()
  end
 
  if (self.db.profile.sendAll == true) then -- Send to all friends
-  local numberOfFriends = C_FriendList.GetNumFriends() -- Normal friends first
+  local numberOfFriends, onlineFriends = C_FriendList.GetNumFriends() -- Normal friends first
   if (numberOfFriends > 0) then
    for i = 1, numberOfFriends do
-    local f = C_FriendList.GetFriendInfoByIndex(i)
-	if f then
-		if (f.name ~= nil and f.connected) then
-			self:Debug("Sending whisper to" .. f.name)
-			self:SendCommMessage("friendxp", msg, "WHISPER", f.name)
-		end
-	end
+    local nameT, _, _, _, connectedT, _, _ = C_FriendList.GetFriendInfo(i)
+    if (nameT ~= nil and connectedT) then
+	  self:Debug("Sending whisper to" .. nameT)
+	  self:SendCommMessage("friendxp", msg, "WHISPER", nameT)
+    end
    end
   end
 	-- FIX ME Check if this friend stuff still works
   local BNFriends, _ = BNGetNumFriends() -- Then do RealID/BattleTag Friends, doesn't work with connected realms
   if (BNFriends > 0) then
    for i = 1, BNFriends do
-    local bnetAccountID, accountName, battleTag, isBattleTagPresence, characterName, bnetIDGameAccount, client, isOnline, lastOnline, isAFK, isDND, messageText, noteText, isRIDFriend, messageTime, canSoR, isReferAFriend, canSummonFriend  = BNGetFriendInfo(i)
+    local presenceID, presenceName, battleTag, isBattleTagPresence, toonName, toonID, client, isOnline, _, _, _, _, _, isRIDFriend, _, _  = BNGetFriendInfo(i)
 	for gameAccountIndex = 1, BNGetNumFriendGameAccounts(i) do
-     self:Debug("Processing BattleNet: " .. battleTag)
-	 if (isOnline and characterName) then
-	  local hasFocus, characterName, client, realmName, realmID, faction, race, class, guild, zoneName, level, gameText, broadcastText, broadcastTime, canSoR, toonID, bnetIDAccount, isGameAFK, isGameBusy = BNGetFriendGameAccountInfo(i, gameAccountIndex)
-	  if (client == BNET_CLIENT_WOW and CanCooperateWithGameAccount(toonID)) then
+     self:Debug("Processing BattleNet: " .. presenceName)
+	 if (isOnline and toonName) then
+	  local _, _, client, realmName, _, _, _, _, _, _, _ = BNGetFriendGameAccountInfo(i, gameAccountIndex)
+	  if (client == BNET_CLIENT_WOW and realmName == GetRealmName() and CanCooperateWithGameAccount(toonID)) then
 	   self:Debug("Sent")
-	   self:SendCommMessage("friendxp", msg, "WHISPER", characterName .. '-' .. realmName)
+	   self:SendCommMessage("friendxp", msg, "WHISPER", toonName)
 	  end
 	 end
 	end
@@ -2452,7 +2440,7 @@ function FriendXP:HandlePlayerXP(xp, xptotal, restbonus)
   local frame = CreateFrame("Frame", nil, _G["PlayerFrame"], BackdropTemplateMixin and "BackdropTemplate")
   frame:SetBackdrop({bgFile = LSM:Fetch("statusbar", "Blizzard")})
   frame:SetBackdropColor(self.db.profile.pf.bgcolor.r, self.db.profile.pf.bgcolor.g, self.db.profile.pf.bgcolor.b, self.db.profile.pf.bgcolor.a)
-  frame:SetPoint("TOPLEFT", _G["PlayerFrame"], "TOPLEFT", 110, -24)
+  frame:SetPoint("TOPLEFT", _G["PlayerFrame"], "TOPLEFT", 90, -24)
   frame:SetWidth(116)
   frame:SetHeight(16)
   frame.rest = CreateFrame("StatusBar", nil, frame)
